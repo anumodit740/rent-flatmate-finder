@@ -277,49 +277,120 @@ npm run dev
 
 ---
 
-## 🔄 CI/CD
+## 🐳 Docker Deployment
 
-### GitHub Actions
+To spin up the entire application environment (Frontend + Backend + PostgreSQL) with a single command:
 
-- **Lint workflow** (`.github/workflows/lint.yml`): Runs on every push/PR to `main` and `develop`
-  - Lints frontend (ESLint + Next.js rules)
-  - Lints backend (TypeScript-ESLint)
-  - Tests will be added in the next phase
+```bash
+docker-compose up --build
+```
+
+- **Frontend**: Available at [http://localhost:3000](http://localhost:3000)
+- **Backend API**: Running at [http://localhost:5000](http://localhost:5000)
+- **PostgreSQL**: Bound to `localhost:5432`
 
 ---
 
-## 🗺️ Development Roadmap
+## 🔄 CI/CD & Testing
 
-### ✅ Phase 0 — Foundation (Current)
-- [x] Project structure (frontend + backend)
-- [x] TypeScript strict mode, ESLint, Prettier
-- [x] Tailwind v4 design system with custom tokens
-- [x] shadcn/ui configuration
-- [x] Express skeleton with error handling, logging, health endpoint
-- [x] Prisma + PostgreSQL connection
-- [x] Environment variable templates
-- [x] GitHub Actions lint CI
+### GitHub Actions
+The repository includes a GitHub Actions configuration at `.github/workflows/ci.yml` that automatically runs on every push or pull request to the `main` branch.
+- Checks backend and frontend code quality (`eslint`)
+- Connects a temporary PostgreSQL service container
+- Runs backend database migrations (`prisma db push`)
+- Executes all unit and API integration tests (`npm run test`)
 
-### 🔜 Phase 1 — Core Features
-- [ ] Prisma schema (User, Listing, Room, UserPreferences)
-- [ ] JWT authentication (register, login, refresh, logout)
-- [ ] User profile CRUD
-- [ ] Room listing CRUD with image uploads
+---
 
-### 📋 Phase 2 — AI Matching & Chat
-- [ ] AI compatibility scoring engine (OpenAI / Claude)
-- [ ] Match ranking algorithm
-- [ ] Socket.IO real-time chat
-- [ ] Chat message persistence
+## 📋 Database Schema
 
-### 📋 Phase 3 — Notifications & Polish
-- [ ] Email notifications (Resend / Nodemailer)
-- [ ] Search & filter UI
-- [ ] Dashboard views (owner / tenant)
-- [ ] Responsive mobile layouts
+The PostgreSQL database contains 9 models defined in `backend/prisma/schema.prisma`:
+- **User**: Core identities with email, password hashes, registration states, and roles (`TENANT`, `OWNER`, `ADMIN`).
+- **TenantProfile**: Preferred location, budget parameters (`budgetMin`, `budgetMax`), move-in schedule, and bio notes.
+- **Listing**: Flat details including rent, deposit, location, availability date, rules list, and room types.
+- **ListingPhoto**: Ordered gallery links mapped 1:N to Listings.
+- **CompatibilityScore**: Unique `(tenantId, listingId)` score cache storing integer matches (0-100) and LLM justifications.
+- **InterestRequest**: Match handshake record mapping tenant and listing states (`PENDING`, `ACCEPTED`, `DECLINED`).
+- **Conversation**: Instantiated chat lines mapping 1:1 with accepted interest handshakes.
+- **ChatMessage**: Timestamped chats with read receipts (`readAt`).
+- **Notification**: User notification stack records with metadata logs.
 
-### 📋 Phase 4 — Production
-- [ ] Unit & integration tests
-- [ ] Rate limiting & input sanitization
-- [ ] Docker setup
-- [ ] Deployment (Vercel + Railway / Render)
+---
+
+## 🔌 API Documentation
+
+All REST routes return unified JSON envelopes:
+- Success: `{ "status": "success", "data": { ... } }`
+- Error: `{ "status": "error", "message": "error description", "errors": { ... } }`
+
+### 🔐 Authentication
+- `POST /api/auth/register` — Self-register a `TENANT` or `OWNER` account. (Admin accounts must be created manually).
+- `POST /api/auth/login` — Sign in, retrieves JWT tokens. Sets short-term access token (15m in response body) and long-term refresh token (30d).
+- `POST /api/auth/refresh` — Rotates access and refresh tokens.
+- `POST /api/auth/logout` — Invalidates/discards active sessions.
+- `GET /api/auth/me` — Authenticated payload verifying current active profiles.
+
+### 🏠 Listings
+- `GET /api/listings` — Public/tenant page browsing. Includes filters (`location`, `minRent`, `maxRent`, `roomType`, `furnishingStatus`) and pagination (`page`, `limit`). Automatically matches and includes compatibility scores for authenticated tenants.
+- `POST /api/listings` — Create a room listing (OWNER role, accepts `multipart/form-data` with up to 5 photos).
+- `PUT /api/listings/:id` — Update listing details (OWNER, ownership check enforced).
+- `PATCH /api/listings/:id/status` — Mark a listing as `FILLED` (hides it from search feeds) or `ACTIVE`.
+- `DELETE /api/listings/:id` — Permanently delete a listing.
+
+### 🔍 Compatibility Scoring Prompt Model
+
+#### Prompt Pattern
+The backend compiles listing information and tenant details into JSON before executing the LLM completion:
+```text
+Given this room listing: {listing_json} and this tenant profile: {tenant_json}, compute a compatibility score from 0 to 100 based on budget match, location match, timing, and lifestyle fit. Return ONLY valid JSON: { "score": <number 0-100>, "explanation": "<brief reason>" }
+```
+
+#### Real Sample Input/Output Pair
+**Sample Input**:
+- **Listing**:
+  ```json
+  {
+    "title": "Cozy Single Room near Bandra",
+    "location": "Mumbai",
+    "rent": 15000,
+    "roomType": "SINGLE",
+    "furnishingStatus": "FURNISHED",
+    "amenities": ["wifi", "air_conditioning"],
+    "rules": ["no_smoking"],
+    "availableFrom": "2025-08-01"
+  }
+  ```
+- **Tenant Profile**:
+  ```json
+  {
+    "preferredLocation": "Mumbai",
+    "budgetMin": 10000,
+    "budgetMax": 20000,
+    "moveInDate": "2025-08-01",
+    "occupation": "Software Engineer",
+    "lifestyle": "Vegetarian, early riser",
+    "bio": "Quiet professional looking for a peaceful flatmate setup."
+  }
+  ```
+
+**Expected JSON Response**:
+```json
+{
+  "score": 95,
+  "explanation": "Perfect location match in Mumbai. The rent of 15,000 fits well within the tenant's 10,000-20,000 budget. Available date matches move-in date perfectly."
+}
+```
+
+---
+
+## 🗺️ Project Roadmap
+
+- [x] **Phase 0** — Monorepo foundations, ESLint, Prettier, TypeScript Strict settings.
+- [x] **Phase 1** — Database schema models, indexing plans, and seed scripts.
+- [x] **Phase 2** — JWT security layers, token rotation, cookies, and authentication screens.
+- [x] **Phase 3** — Listings upload flows, photo storage configurations, and browse criteria.
+- [x] **Phase 4** — AI matching, fallback math engines, ADR documentation, and badge UI.
+- [x] **Phase 5** — Match handshakes, Resend/SMTP email triggers, and notifications drawer.
+- [x] **Phase 6** — Socket.IO rooms, optimistic synchronization, read logs, and clean exit signals.
+- [x] **Phase 7** — Account suspension toggles, item removals, and platform statistics grid.
+
