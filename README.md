@@ -467,7 +467,7 @@ Need help? Open an [Issue](https://github.com/anumodit740/rent-flatmate-finder/i
 
 <div align="center">
 
-**Made with ❤️ by [Anumod Pal](https://github.com/anumodit740)**
+**Made with ❤️ by [Anumodit](https://github.com/anumodit740)**
 
 ⭐ Star this repo if you found it helpful!
 
