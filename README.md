@@ -394,3 +394,5 @@ Given this room listing: {listing_json} and this tenant profile: {tenant_json}, 
 - [x] **Phase 6** — Socket.IO rooms, optimistic synchronization, read logs, and clean exit signals.
 - [x] **Phase 7** — Account suspension toggles, item removals, and platform statistics grid.
 
+#   r e n t - f l a t m a t e - f i n d e r  
+ 
